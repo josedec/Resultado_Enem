@@ -1,112 +1,128 @@
-# Descrição do projeto: Assistente de Investimentos com RPA, n8n e IA Generativa
+# Como implementar IA no n8n para gerar mensagens automáticas de aprovação no ENEM
 
-O projeto [DIO Lab — Assistente de Investimentos RPA n8n](<https://github.com/josedec/dio-lab-assistente-investimentos-rpa-n8n?utm_source=chatgpt.com>) tem como objetivo automatizar a coleta de dados de clientes e a geração de mensagens personalizadas sobre investimentos, utilizando Python, RPA, n8n e, opcionalmente, Inteligência Artificial Generativa.
+Vamos evoluir o workflow anterior para que a Inteligência Artificial escreva uma mensagem personalizada para cada estudante aprovado e envie essa mensagem automaticamente pelo Telegram.
 
-Josedec · GitHub
+Em vez de enviar sempre o mesmo texto, a IA poderá usar o nome do estudante, o curso e o contexto da aprovação para criar uma mensagem mais natural e acolhedora.
 
-A proposta é simular um processo de atendimento financeiro no qual um robô coleta informações de clientes, identifica o perfil de investidor e prepara uma comunicação adequada para cada pessoa.
+## 1. Arquitetura do workflow com IA
 
-## 1. Como funciona o projeto?
+1. Schedule Trigger
 
-1. Fonte de dados
+Executa a cada 15 minutos
 
-Página HTML com clientes fictícios e arquivo CSV com opções de investimento.
+2. Google Sheets
 
-2. RPA com Python
+Lê os resultados dos estudantes
 
-O script utiliza BeautifulSoup para extrair os dados dos clientes da página web.
+3. IF
 
-3. Webhook do n8n
+Aprovado e ainda não notificado?
 
-Recebe os dados enviados pelo script Python e inicia o workflow de automação.
+4. OpenAI — gerar mensagem
 
-4. Processamento dos dados
+Cria um texto personalizado com IA
 
-Cruza o perfil do cliente com as opções de investimento disponíveis.
+5. Telegram — Send Message
 
-5. Geração da mensagem
+Envia o texto produzido pela IA
 
-Cria uma mensagem baseada em um modelo fixo ou, na versão avançada, com auxílio de IA generativa.
+6. Google Sheets — Update Row
 
-Fluxo resumido a partir da arquitetura e das etapas documentadas no repositório.
+Registra que o aviso foi enviado
 
-Josedec · GitHub
+O principal acréscimo é o node de IA entre o IF e o Telegram. O restante do workflow continua responsável por filtrar os aprovados e controlar os envios.
 
-## 2. Tecnologias utilizadas
+## 2. Adicionar o node de IA
 
-| Tecnologia | Função no projeto |
-| --- | --- |
-| Python | Executar o script de automação. |
-| BeautifulSoup | Extrair informações da página HTML. |
-| n8n | Orquestrar as etapas do processo visualmente. |
-| Webhook HTTP | Fazer a comunicação entre Python e n8n. |
-| CSV | Armazenar opções de investimento por perfil. |
-| IA Generativa | Criar mensagens personalizadas na versão avançada. |
-| GitHub Pages | Hospedar a página de clientes e o arquivo CSV. |
+A opção mais direta é usar o node OpenAI do n8n, com uma operação de geração de texto. Você precisará de uma chave de API da OpenAI; o uso da API pode ser cobrado separadamente da assinatura do ChatGPT.
 
-Essas tecnologias são descritas no README do projeto.
+1. No workflow, clique em `+`.
+2. Pesquise `OpenAI`.
+3. Adicione o node e selecione a operação de geração de texto ou mensagem, conforme a versão disponível.
+4. Crie uma credencial usando sua API key.
+5. Selecione um modelo de texto econômico disponível na sua conta, por exemplo, `gpt-4o-mini`, se estiver disponível.
 
-Josedec · GitHub
+A integração oficial permite usar modelos da OpenAI nos workflows do n8n.
 
-## 3. Exemplo prático de funcionamento
+n8n
 
-Imagine que a página contenha os seguintes clientes fictícios:
+## 3. Configurar o prompt da IA
 
-Cliente A — Conservador
+No campo de instruções ou mensagem do node OpenAI, cole este prompt. As expressões entre chaves serão substituídas pelos dados de cada linha da planilha.
 
-O fluxo seleciona opções com foco em renda fixa e segurança.
+### Prompt de geração automática
 
-Resultado: mensagem que prioriza estabilidade e preservação de capital.
+ Copiar prompt
 
-Cliente B — Moderado
+Você é um assistente de comunicação educacional. Escreva uma mensagem de parabéns em português brasileiro para um estudante cuja aprovação já foi confirmada na planilha. Nome: {{ $json.nome }} Curso: {{ $json.curso }} Regras: - Seja acolhedor, natural e positivo. - Use no máximo 100 palavras. - Use no máximo 2 emojis. - Não invente notas, classificação, universidade, bolsa ou informações que não foram fornecidas. - Não prometa matrícula ou vaga além do que os dados confirmam. - Não inclua explicações sobre o prompt. - Retorne somente o texto final da mensagem, pronto para enviar no Telegram.
 
-O fluxo considera alternativas de renda fixa e variável.
+Por que esse prompt funciona? Ele orienta o modelo a personalizar a mensagem sem inventar detalhes sobre o resultado do estudante.
 
-Resultado: mensagem com uma abordagem equilibrada entre risco e retorno.
+## 4. Conectar a IA ao Telegram
 
-Cliente C — Arrojado
+Conecte o node OpenAI ao node Telegram, mantendo o Telegram depois da geração do texto.
 
-O fluxo considera alternativas com maior exposição à renda variável.
+Configure o Telegram:
 
-Resultado: mensagem que explica o potencial de retorno e os riscos envolvidos.
+- Resource: Message
+- Operation: Send Message
+- Credential: sua credencial do bot
+- Chat ID: use a expressão abaixo para recuperar o identificador da planilha.
 
-Esses exemplos ilustram a lógica proposta pelo laboratório; não são recomendações financeiras reais.
+javascript
+```
+{{ $('IF').item.json.chat_id }}
+```
 
-Josedec · GitHub
+No campo Text, selecione a saída gerada pelo node OpenAI.
 
-## 4. Qual é o papel do n8n?
+O caminho exato depende da operação e da versão do node. Para configurá-lo corretamente:
 
-O n8n é o centro da automação. Ele conecta as diferentes etapas sem exigir que toda a lógica seja programada manualmente em Python.
+1. Execute o node OpenAI com um estudante de teste.
+2. Abra o resultado em Output.
+3. Localize o campo que contém o texto produzido pela IA.
+4. No campo Text do Telegram, ative o modo Expression e selecione esse campo pelo painel de expressões.
 
-O workflow deve executar estas tarefas:
+Por exemplo, se o resultado do node tiver uma propriedade chamada `text`, a expressão será:
 
-- Receber: capturar os dados enviados pelo Webhook.
-- Consultar: obter as opções de investimento do arquivo CSV.
-- Tratar: organizar os dados recebidos e cruzá-los com os perfis.
-- Gerar: montar a mensagem correspondente a cada cliente.
-- Expandir: integrar um modelo de IA para tornar as mensagens mais dinâmicas.
+javascript
+```
+{{ $json.text }}
+```
 
-Na versão mínima, a geração utiliza mensagens predefinidas. Na versão avançada, é possível integrar um modelo como Gemini ou GPT.
+Não use essa última expressão sem conferir a saída real do seu node. O Telegram aceita o texto gerado diretamente no campo de mensagem.
 
-Josedec · GitHub
+GitHub
 
-## 5. Como começar a executar o projeto
+## 5. Atualizar a planilha
 
-1. Acesse o repositório. Entre no [GitHub do projeto](<https://github.com/josedec/dio-lab-assistente-investimentos-rpa-n8n?utm_source=chatgpt.com>) e faça o fork ou baixe os arquivos.
-2. Execute o notebook Python. Abra o notebook de extração no [Google Colab](<https://colab.research.google.com/?utm_source=chatgpt.com>) e entenda como os dados são coletados.
-3. Crie um workflow no n8n. Adicione um node Webhook para receber os dados dos clientes.
-4. Configure a integração. Copie a URL do Webhook e configure o envio no script Python. Atenção: o README informa que essa parte do envio ainda está pendente no código inicial.
-5. Implemente o processamento. Configure os nodes para ler as opções de investimento, cruzar os dados e gerar as mensagens.
-6. Teste o fluxo completo. Verifique se os dados chegam corretamente e se cada cliente recebe a mensagem correspondente ao seu perfil.
- GitHub
+Depois do envio, mantenha o node `Google Sheets — Update Row` para marcar `aviso_enviado = SIM`.
 
-## 6. O que você aprende com esse projeto?
+Use uma coluna de identificação única, como `id_estudante`, para atualizar a linha correta. Se o node de IA substituir os dados de entrada pela resposta do modelo, recupere o identificador a partir do node anterior ou use um node `Merge` para combinar os dados originais com o texto gerado.
 
-- Automação de tarefas repetitivas com RPA.
-- Integração entre Python e n8n por meio de Webhooks.
-- Manipulação de dados estruturados e arquivos CSV.
-- Construção de workflows visuais.
-- Aplicação de IA generativa em processos de negócio.
-- Separação de responsabilidades entre coleta, processamento e comunicação.
+O envio deve ocorrer somente depois de o resultado estar confirmado e o campo de controle indicar que ainda não houve notificação.
 
-Em resumo: é um projeto de aprendizado que demonstra como transformar uma tarefa manual de coleta e preparação de comunicações financeiras em um processo automatizado, integrando Python, n8n e IA. O repositório descreve a arquitetura e as etapas do desafio, mas o workflow completo precisa ser implementado e testado para que a automação funcione de ponta a ponta.
+## 6. Exemplo do resultado
+
+Para uma linha com nome `Ana` e curso `Administração`, a IA poderia gerar:
+
+Bot de aprovação ENEM
+
+🎉 Parabéns, Ana!
+
+Sua aprovação é uma conquista muito especial! Todo o esforço e a dedicação ao longo dessa jornada merecem ser celebrados.
+
+Que essa nova etapa no curso de Administração traga muitas oportunidades de aprendizado e crescimento. Desejamos muito sucesso nessa caminhada! 📚
+
+Exemplo ilustrativo de mensagem gerada por IA.
+
+## 7. Teste antes de ativar
+
+- [ ]O IF permite somente estudantes aprovados ainda não notificados.
+- [ ]O OpenAI recebe o nome e o curso corretos.
+- [ ]O texto gerado aparece corretamente na saída do node.
+- [ ]O Telegram recebe o texto e usa o `chat_id` correto.
+- [ ]A planilha é atualizada após o envio bem-sucedido.
+- [ ]Uma segunda execução não envia a mesma mensagem novamente.
+
+Minha recomendação: comece com o node OpenAI e o Telegram funcionando para uma única linha de teste. Depois, teste o processamento de várias linhas e o controle de mensagens duplicadas antes de ativar a execução automática.
